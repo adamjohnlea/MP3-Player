@@ -17,6 +17,24 @@ pygame.mixer.init()
 # Internal storage for full paths aligned with playlist_box indices
 playlist_paths = []
 
+# Cache for song lengths to avoid per-second disk I/O
+song_lengths = {}
+
+# Flag to indicate the user is scrubbing the time slider
+is_scrubbing = False
+
+
+def get_song_length(path):
+	"""Return song length in seconds (float), cached to avoid repeated disk reads."""
+	if path in song_lengths:
+		return song_lengths[path]
+	try:
+		length = MP3(path).info.length
+	except Exception:
+		length = 0
+	song_lengths[path] = length
+	return length
+
 # Helper to enable/disable back/forward buttons based on current selection
 
 def update_nav_buttons():
@@ -61,19 +79,34 @@ def play_time():
 		return
 	song_path = playlist_paths[index]
 	
-	# Find Current Song Length
-	song_mut = MP3(song_path)
+	# Get Current Song Length from cache
 	global song_length
-	song_length = song_mut.info.length
+	song_length = get_song_length(song_path)
 	# Convert to time format
 	converted_song_length = time.strftime('%M:%S', time.gmtime(song_length))
 	
 	# Use the slider as the single source of truth to avoid jitter/backward jumps
 	current_sec = int(song_slider.get())
 
-	# Check to see if song is over
-	if current_sec >= int(song_length):
-		stop()
+	# Check to see if song is over -> auto-advance if possible
+	if current_sec >= int(song_length) and int(song_length) > 0:
+		size = playlist_box.size()
+		if index < size - 1:
+			# Advance to the next track
+			next_song()
+			# Schedule next tick and return
+			status_bar.after(1000, play_time)
+			return
+		else:
+			# Last track: stop
+			stop()
+			return
+
+	# If the user is scrubbing, only update the status (preview) and don't move the slider
+	if is_scrubbing:
+		converted_current_time = time.strftime('%M:%S', time.gmtime(current_sec))
+		status_bar.config(text=f'Time Elapsed: {converted_current_time} of {converted_song_length}  ')
+		status_bar.after(1000, play_time)
 		return
 
 	if paused:
@@ -382,23 +415,38 @@ def volume(x):
 
 # Create a Slide Function For Song Positioning
 def slide(x):
-	# Resolve full path from selected index
+	# Legacy function retained for compatibility; no-op to avoid feedback loop
+	return
+
+
+def on_scrub_start(event):
+	"""Mark that the user started scrubbing; don't play while dragging."""
+	global is_scrubbing
+	is_scrubbing = True
+
+
+def on_seek_release(event):
+	"""Seek to the position set on the slider when the user releases the mouse."""
+	global is_scrubbing, paused
+	is_scrubbing = False
 	selection = playlist_box.curselection()
 	if not selection:
 		return
 	index = selection[0]
 	if index < 0 or index >= len(playlist_paths):
 		return
-	song_path = playlist_paths[index]
-	
-	#Load song with pygame mixer
-	pygame.mixer.music.load(song_path)
-	#Play song with pygame mixer
-	pygame.mixer.music.play(loops=0, start=song_slider.get())
-	# Ensure not paused after seeking
-	global paused
+	target = int(song_slider.get())
+	# Try seeking without reloading to avoid stutter; if it fails, reload then seek
+	try:
+		pygame.mixer.music.play(loops=0, start=target)
+	except Exception:
+		try:
+			song_path = playlist_paths[index]
+			pygame.mixer.music.load(song_path)
+			pygame.mixer.music.play(loops=0, start=target)
+		except Exception:
+			return
 	paused = False
-	# Update play button to show pause icon while playing
 	try:
 		play_button.config(image=pause_btn_img)
 	except Exception:
@@ -424,15 +472,19 @@ volume_slider = ttk.Scale(volume_frame, from_=0, to=1, orient=VERTICAL, length=1
 volume_slider.pack(pady=10)
 
 # Create Song Slider
-song_slider = ttk.Scale(main_frame, from_=0, to=100, orient=HORIZONTAL, length=360, value=0, command=slide)
+song_slider = ttk.Scale(main_frame, from_=0, to=100, orient=HORIZONTAL, length=360, value=0)
 song_slider.grid(row=2, column=0, pady=20)
+# Bind scrubbing start/end to avoid feedback loop
+song_slider.bind('<ButtonPress-1>', lambda e: on_scrub_start(e))
+song_slider.bind('<ButtonRelease-1>', lambda e: on_seek_release(e))
 
-# Define Button Images For Controls
-back_btn_img = PhotoImage(file='images/back50.png')
-forward_btn_img = PhotoImage(file='images/forward50.png')
-play_btn_img = PhotoImage(file='images/play50.png')
-pause_btn_img = PhotoImage(file='images/pause50.png')
-stop_btn_img = PhotoImage(file='images/stop50.png')
+# Define Button Images For Controls (resolve robust paths)
+base_dir = os.path.dirname(os.path.abspath(__file__))
+back_btn_img = PhotoImage(file=os.path.join(base_dir, 'images', 'back50.png'))
+forward_btn_img = PhotoImage(file=os.path.join(base_dir, 'images', 'forward50.png'))
+play_btn_img = PhotoImage(file=os.path.join(base_dir, 'images', 'play50.png'))
+pause_btn_img = PhotoImage(file=os.path.join(base_dir, 'images', 'pause50.png'))
+stop_btn_img = PhotoImage(file=os.path.join(base_dir, 'images', 'stop50.png'))
 
 
 # Create Button Frame
