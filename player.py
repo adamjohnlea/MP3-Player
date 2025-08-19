@@ -22,6 +22,8 @@ class ThemeManager:
 		self.current_skin = None
 		self.images = {}
 		self.skin_dir = None
+		self.controls = {}
+		self.use_text_buttons = False
 		# For custom chrome dragging
 		self._drag_enabled = False
 		self._drag_start_root = (0, 0)
@@ -30,10 +32,30 @@ class ThemeManager:
 	def _enable_drag(self):
 		if self._drag_enabled:
 			return
+		def _is_protected_widget(w):
+			# Do not start/move drag if the event originated from song or volume sliders
+			protected = [
+				self.widgets.get('song_slider'),
+				self.widgets.get('volume_slider'),
+			]
+			try:
+				while w is not None:
+					if w in protected:
+						return True
+					w = w.master
+				return False
+			except Exception:
+				return False
 		def _on_press(event):
+			# Skip initiating drag if clicking on protected widgets
+			if _is_protected_widget(event.widget):
+				return
 			self._drag_start_root = (event.x_root, event.y_root)
 			self._drag_win_origin = (self.root.winfo_x(), self.root.winfo_y())
 		def _on_motion(event):
+			# Skip moving while interacting with protected widgets
+			if _is_protected_widget(event.widget):
+				return
 			dx = event.x_root - self._drag_start_root[0]
 			dy = event.y_root - self._drag_start_root[1]
 			x = self._drag_win_origin[0] + dx
@@ -86,6 +108,8 @@ class ThemeManager:
 		fonts = self.current_skin.get('fonts', {})
 		metrics = self.current_skin.get('metrics', {})
 		window = self.current_skin.get('window', {})
+		self.controls = self.current_skin.get('controls', {})
+		self.use_text_buttons = bool(self.controls.get('use_text_buttons', False))
 
 		# Window size and bg color
 		if isinstance(window, dict) and 'width' in window and 'height' in window:
@@ -167,21 +191,98 @@ class ThemeManager:
 		except Exception:
 			pass
 
-		# Button images
-		def set_img(btn_key, img_key):
-			btn = self.widgets.get(btn_key)
-			img = self.images.get(img_key)
-			if btn and img:
+		# Slider styling (ttk) if provided by skin
+		try:
+			from tkinter import ttk as _ttk
+			style = _ttk.Style()
+			slider_cfg = self.current_skin.get('slider', {}) if isinstance(self.current_skin, dict) else {}
+			trough = slider_cfg.get('trough_color')
+			thumb = slider_cfg.get('slider_color') or slider_cfg.get('thumb_color')
+			thickness = slider_cfg.get('thickness')
+			force_theme = slider_cfg.get('force_theme')
+			# Optionally force a theme that honors color options (clam is reliable across platforms)
+			if force_theme:
 				try:
-					btn.config(image=img)
-					btn.image = img  # keep reference
+					style.theme_use(force_theme)
 				except Exception:
 					pass
-		set_img('back_button', 'back')
-		set_img('forward_button', 'forward')
-		# Play/Pause handled dynamically; set initial play image
-		set_img('play_button', 'play')
-		set_img('stop_button', 'stop')
+			# Create styles only if colors or thickness are provided
+			if trough or thumb or thickness:
+				# Horizontal (song scrubber)
+				style_name_h = 'Themed.Horizontal.TScale'
+				cfg_h = {}
+				if trough: cfg_h['troughcolor'] = trough
+				if thumb: cfg_h['background'] = thumb
+				if thickness: cfg_h['thickness'] = int(thickness)
+				if cfg_h:
+					style.configure(style_name_h, **cfg_h)
+					song = self.widgets.get('song_slider')
+					if song:
+						try:
+							song.configure(style=style_name_h)
+						except Exception:
+							pass
+				# Vertical (volume)
+				style_name_v = 'Themed.Vertical.TScale'
+				cfg_v = {}
+				if trough: cfg_v['troughcolor'] = trough
+				if thumb: cfg_v['background'] = thumb
+				if thickness: cfg_v['thickness'] = int(thickness)
+				if cfg_v:
+					style.configure(style_name_v, **cfg_v)
+					vol = self.widgets.get('volume_slider')
+					if vol:
+						try:
+							vol.configure(style=style_name_v)
+						except Exception:
+							pass
+		except Exception:
+			pass
+
+		# Controls: text-mode or image-mode
+		if self.use_text_buttons:
+			labels = self.controls.get('button_text', {})
+			btn_cfg = {
+				'fg': self.controls.get('button_fg', colors.get('playlist_fg', None)),
+				'bg': self.controls.get('button_bg', colors.get('frame_bg', None)),
+			}
+			w = self.controls.get('button_width', 2)
+			h = self.controls.get('button_height', 1)
+			def set_text(btn_key, key, default_txt):
+				btn = self.widgets.get(btn_key)
+				if btn:
+					try:
+						btn.config(image='', text=labels.get(key, default_txt), width=w, height=h)
+						# Apply optional fg/bg if present
+						cfg = {k: v for k, v in btn_cfg.items() if v is not None}
+						if cfg:
+							btn.config(**cfg)
+						btn.image = None
+					except Exception:
+						pass
+			set_text('back_button', 'back', 'B')
+			set_text('forward_button', 'forward', 'F')
+			set_text('play_button', 'play', 'P')
+			set_text('stop_button', 'stop', 'S')
+		else:
+			# Image-mode: optionally subsample icons
+			subsample = int(metrics.get('icon_subsample', 1) or 1)
+			def set_img(btn_key, img_key):
+				btn = self.widgets.get(btn_key)
+				img = self.images.get(img_key)
+				if btn and img:
+					try:
+						scaled = img.subsample(subsample, subsample) if subsample > 1 else img
+						# Reset size so the image defines the button size (important when switching from text mode)
+						btn.config(image=scaled, text='', width=0, height=0)
+						btn.image = scaled  # keep reference
+					except Exception:
+						pass
+			set_img('back_button', 'back')
+			set_img('forward_button', 'forward')
+			# Play/Pause handled dynamically; set initial play image
+			set_img('play_button', 'play')
+			set_img('stop_button', 'stop')
 
 		# Optional background image for the window (Level 2)
 		bg_rel = window.get('background') if isinstance(window, dict) else None
@@ -258,6 +359,18 @@ def update_nav_buttons():
 def themed_image(key, fallback_img):
 	try:
 		_theme = globals().get('THEME')
+		# If the theme uses text buttons, handle play/pause by setting text and clearing image
+		if _theme and getattr(_theme, 'use_text_buttons', False) and key in ('play', 'pause'):
+			labels = getattr(_theme, 'controls', {}).get('button_text', {}) if hasattr(_theme, 'controls') else {}
+			default_map = {'play': 'P', 'pause': 'II'}
+			text = labels.get(key, default_map.get(key, ''))
+			try:
+				# Set text and clear image directly; caller will set image=None
+				play_button.config(text=text, image='')
+				play_button.image = None
+			except Exception:
+				pass
+			return None
 		if _theme and hasattr(_theme, 'images'):
 			return _theme.images.get(key, fallback_img)
 		return fallback_img
@@ -752,6 +865,8 @@ widgets = {
 	'main_frame': main_frame,
 	'control_frame': control_frame,
 	'volume_frame': volume_frame,
+	'volume_slider': volume_slider,
+	'song_slider': song_slider,
 	'status_bar': status_bar,
 	'back_button': back_button,
 	'forward_button': forward_button,

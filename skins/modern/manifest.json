@@ -1,0 +1,55 @@
+{
+  "name": "modern",
+  "window": {
+    "width": 420,
+    "height": 300,
+    "use_custom_chrome": true
+  },
+  "colors": {
+    "root_bg": "#0d0f14",
+    "frame_bg": "#0d0f14",
+    "playlist_bg": "#0f1420",
+    "playlist_fg": "#e6f1ff",
+    "playlist_select_bg": "#00d1ff",
+    "playlist_select_fg": "#001018",
+    "status_bg": "#0b0e13",
+    "status_fg": "#8ab4f8"
+  },
+  "fonts": {
+    "base": ["Helvetica", 10],
+    "status": ["Helvetica", 9]
+  },
+  "controls": {
+    "use_text_buttons": true,
+    "button_text": {
+      "back": "B",
+      "forward": "F",
+      "play": "P",
+      "pause": "II",
+      "stop": "S"
+    },
+    "button_width": 2,
+    "button_height": 1,
+    "button_fg": "#e6f1ff",
+    "button_bg": "#0d0f14"
+  },
+  "images": {
+    "back": "../../images/back50.png",
+    "forward": "../../images/forward50.png",
+    "play": "../../images/play50.png",
+    "pause": "../../images/pause50.png",
+    "stop": "../../images/stop50.png"
+  },
+  "slider": {
+    "trough_color": "#1f2937",
+    "slider_color": "#00d1ff",
+    "thickness": 10,
+    "force_theme": "clam"
+  },
+  "metrics": {
+    "control_padx": 6,
+    "control_pady": 8,
+    "playlist_width": 48,
+    "icon_subsample": 2
+  }
+}

@@ -127,6 +127,13 @@ All image paths in the manifest are resolved relative to the manifest’s locati
   - control_pady: integer. Vertical padding around the control row.
   - playlist_width: integer. Width of the playlist listbox in characters (approximate).
 
+- slider: object (optional)
+  - trough_color: string. Color of the scale trough for both sliders.
+  - slider_color: string. Color of the slider thumb/handle (mapped to ttk 'background').
+  - thickness: integer. Visual thickness of the scale/handle (applied via ttk style).
+  - force_theme: string. Force a ttk theme (e.g., "clam") so colors reliably apply across platforms.
+  - Notes: ttk respects these best on themes like 'clam'; native Aqua/Win themes may partially ignore. The app applies styles 'Themed.Horizontal.TScale' (song) and 'Themed.Vertical.TScale' (volume) when provided.
+
 
 ## How ThemeManager Applies Your Skin
 

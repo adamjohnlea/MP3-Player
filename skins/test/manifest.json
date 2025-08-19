@@ -26,6 +26,12 @@
     "pause": "../../images/pause50.png",
     "stop": "../../images/stop50.png"
   },
+  "slider": {
+    "trough_color": "#163247",
+    "slider_color": "#19a7ff",
+    "thickness": 12,
+    "force_theme": "clam"
+  },
   "metrics": {
     "control_padx": 12,
     "control_pady": 24,
