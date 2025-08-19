@@ -5,11 +5,201 @@ import time
 from mutagen.mp3 import MP3
 import tkinter.ttk as ttk
 import os
+import json
+from pathlib import Path
 
 root = Tk()
 
 root.title("MP3 Player")
 root.geometry("500x400")
+
+
+class ThemeManager:
+	"""Level-2 image-based skin loader and applier."""
+	def __init__(self, root, widgets):
+		self.root = root
+		self.widgets = widgets  # dict of widget references
+		self.current_skin = None
+		self.images = {}
+		self.skin_dir = None
+		# For custom chrome dragging
+		self._drag_enabled = False
+		self._drag_start_root = (0, 0)
+		self._drag_win_origin = (0, 0)
+
+	def _enable_drag(self):
+		if self._drag_enabled:
+			return
+		def _on_press(event):
+			self._drag_start_root = (event.x_root, event.y_root)
+			self._drag_win_origin = (self.root.winfo_x(), self.root.winfo_y())
+		def _on_motion(event):
+			dx = event.x_root - self._drag_start_root[0]
+			dy = event.y_root - self._drag_start_root[1]
+			x = self._drag_win_origin[0] + dx
+			y = self._drag_win_origin[1] + dy
+			try:
+				self.root.geometry(f"+{int(x)}+{int(y)}")
+			except Exception:
+				pass
+		self.root.bind('<Button-1>', _on_press, add='+')
+		self.root.bind('<B1-Motion>', _on_motion, add='+')
+		self._drag_enabled = True
+
+	def _disable_drag(self):
+		if not self._drag_enabled:
+			return
+		try:
+			self.root.unbind('<Button-1>')
+			self.root.unbind('<B1-Motion>')
+		except Exception:
+			pass
+		self._drag_enabled = False
+
+	def load_skin(self, skin_name):
+		base = Path(__file__).parent
+		self.skin_dir = base / 'skins' / skin_name
+		manifest_file = self.skin_dir / 'manifest.json'
+		if not manifest_file.exists():
+			raise FileNotFoundError(f"Skin manifest not found: {manifest_file}")
+		with open(manifest_file, 'r', encoding='utf-8') as f:
+			data = json.load(f)
+		self.current_skin = data
+		self._load_images(self.skin_dir, data.get('images', {}))
+		self.apply()
+
+	def _load_images(self, skin_dir, images_cfg):
+		# Keep references so Tk doesn’t GC them
+		self.images = {}
+		for key, rel in images_cfg.items():
+			path = skin_dir / rel
+			if path.exists():
+				try:
+					self.images[key] = PhotoImage(file=str(path))
+				except Exception:
+					pass
+
+	def apply(self):
+		if not self.current_skin:
+			return
+		colors = self.current_skin.get('colors', {})
+		fonts = self.current_skin.get('fonts', {})
+		metrics = self.current_skin.get('metrics', {})
+		window = self.current_skin.get('window', {})
+
+		# Window size and bg color
+		if isinstance(window, dict) and 'width' in window and 'height' in window:
+			try:
+				self.root.geometry(f"{int(window['width'])}x{int(window['height'])}")
+			except Exception:
+				pass
+		if 'root_bg' in colors:
+			try:
+				self.root.configure(bg=colors['root_bg'])
+			except Exception:
+				pass
+
+		# Custom chrome handling (remove OS title bar/borders if requested)
+		use_cc = False
+		if isinstance(window, dict):
+			use_cc = bool(window.get('use_custom_chrome', False))
+		try:
+			self.root.overrideredirect(True if use_cc else False)
+			# Optional transparent color (mostly used on Windows)
+			transparent_color = window.get('transparent_color') if isinstance(window, dict) else None
+			if transparent_color:
+				try:
+					self.root.wm_attributes('-transparentcolor', transparent_color)
+				except Exception:
+					pass
+			# Enable dragging when custom chrome is on; disable otherwise
+			if use_cc:
+				self._enable_drag()
+			else:
+				self._disable_drag()
+		except Exception:
+			pass
+
+		# Playlist Listbox
+		pl = self.widgets.get('playlist_box')
+		if pl:
+			cfg = {}
+			if 'playlist_bg' in colors: cfg['bg'] = colors['playlist_bg']
+			if 'playlist_fg' in colors: cfg['fg'] = colors['playlist_fg']
+			if 'playlist_select_bg' in colors: cfg['selectbackground'] = colors['playlist_select_bg']
+			if 'playlist_select_fg' in colors: cfg['selectforeground'] = colors['playlist_select_fg']
+			if 'playlist_width' in metrics: cfg['width'] = metrics['playlist_width']
+			if cfg:
+				try:
+					pl.config(**cfg)
+				except Exception:
+					pass
+
+		# Frames / Status bar
+		frame_bg = colors.get('frame_bg')
+		if frame_bg:
+			for key in ['main_frame', 'control_frame', 'volume_frame']:
+				w = self.widgets.get(key)
+				if w:
+					try:
+						w.config(bg=frame_bg)
+					except Exception:
+						pass
+		status = self.widgets.get('status_bar')
+		if status:
+			s_cfg = {}
+			if 'status_bg' in colors: s_cfg['bg'] = colors['status_bg']
+			if 'status_fg' in colors: s_cfg['fg'] = colors['status_fg']
+			if s_cfg:
+				try:
+					status.config(**s_cfg)
+				except Exception:
+					pass
+
+		# Fonts (optional)
+		try:
+			from tkinter import font as tkfont
+			if 'base' in fonts:
+				base_font = tkfont.Font(family=fonts['base'][0], size=fonts['base'][1])
+				self.root.option_add('*Font', base_font)
+			if status and 'status' in fonts:
+				status.config(font=tuple(fonts['status']))
+		except Exception:
+			pass
+
+		# Button images
+		def set_img(btn_key, img_key):
+			btn = self.widgets.get(btn_key)
+			img = self.images.get(img_key)
+			if btn and img:
+				try:
+					btn.config(image=img)
+					btn.image = img  # keep reference
+				except Exception:
+					pass
+		set_img('back_button', 'back')
+		set_img('forward_button', 'forward')
+		# Play/Pause handled dynamically; set initial play image
+		set_img('play_button', 'play')
+		set_img('stop_button', 'stop')
+
+		# Optional background image for the window (Level 2)
+		bg_rel = window.get('background') if isinstance(window, dict) else None
+		if bg_rel and self.skin_dir is not None:
+			try:
+				bg_path = self.skin_dir / bg_rel
+				canvas = self.widgets.get('bg_canvas')
+				if not canvas:
+					canvas = Canvas(self.root, highlightthickness=0, bd=0)
+					canvas.place(x=0, y=0, relwidth=1, relheight=1)
+					self.widgets['bg_canvas'] = canvas
+				img = PhotoImage(file=str(bg_path))
+				canvas.bg_img = img
+				canvas.delete('all')
+				canvas.create_image(0, 0, anchor='nw', image=img)
+				canvas.lower()  # behind everything
+			except Exception:
+				pass
 
 # Initialize Pygame
 pygame.mixer.init()
@@ -63,6 +253,16 @@ def update_nav_buttons():
 		forward_button.config(state=state_forward)
 	except Exception:
 		pass
+
+# Helper to fetch themed images with fallback
+def themed_image(key, fallback_img):
+	try:
+		_theme = globals().get('THEME')
+		if _theme and hasattr(_theme, 'images'):
+			return _theme.images.get(key, fallback_img)
+		return fallback_img
+	except Exception:
+		return fallback_img
 
 # Create Function To Deal With Time
 def play_time():
@@ -199,7 +399,9 @@ def play():
 			stopped = False
 			# Update play button to show pause icon while playing
 			try:
-				play_button.config(image=pause_btn_img)
+				img = themed_image('pause', pause_btn_img)
+				play_button.config(image=img)
+				play_button.image = img
 			except Exception:
 				pass
 			try:
@@ -213,7 +415,9 @@ def play():
 			paused = True
 			# Update play button to show play icon when paused
 			try:
-				play_button.config(image=play_btn_img)
+				img = themed_image('play', play_btn_img)
+				play_button.config(image=img)
+				play_button.image = img
 			except Exception:
 				pass
 			try:
@@ -230,7 +434,9 @@ def play():
 			stopped = False
 			# Update play button to show pause icon while playing
 			try:
-				play_button.config(image=pause_btn_img)
+				img = themed_image('pause', pause_btn_img)
+				play_button.config(image=img)
+				play_button.image = img
 			except Exception:
 				pass
 			try:
@@ -259,7 +465,9 @@ def play():
 	paused = False
 	# Update play button to show pause icon while playing
 	try:
-		play_button.config(image=pause_btn_img)
+		img = themed_image('pause', pause_btn_img)
+		play_button.config(image=img)
+		play_button.image = img
 	except Exception:
 		pass
 	# Update nav buttons state
@@ -291,7 +499,9 @@ def stop():
 	paused = False
 	# Update play button to show play icon when stopped
 	try:
-		play_button.config(image=play_btn_img)
+		img = themed_image('play', play_btn_img)
+		play_button.config(image=img)
+		play_button.image = img
 	except Exception:
 		pass
 	# Update nav buttons after stop (selection cleared)
@@ -328,7 +538,9 @@ def next_song():
 	paused = False
 	# Update play button to show pause icon while playing
 	try:
-		play_button.config(image=pause_btn_img)
+		img = themed_image('pause', pause_btn_img)
+		play_button.config(image=img)
+		play_button.image = img
 	except Exception:
 		pass
 
@@ -372,7 +584,9 @@ def previous_song():
 	paused = False
 	# Update play button to show pause icon while playing
 	try:
-		play_button.config(image=pause_btn_img)
+		img = themed_image('pause', pause_btn_img)
+		play_button.config(image=img)
+		play_button.image = img
 	except Exception:
 		pass
 
@@ -448,7 +662,9 @@ def on_seek_release(event):
 			return
 	paused = False
 	try:
-		play_button.config(image=pause_btn_img)
+		img = themed_image('pause', pause_btn_img)
+		play_button.config(image=img)
+		play_button.image = img
 	except Exception:
 		pass
 
@@ -467,8 +683,8 @@ playlist_box.bind('<<ListboxSelect>>', lambda e: update_nav_buttons())
 volume_frame = LabelFrame(main_frame, text="Volume")
 volume_frame.grid(row=0, column=1, padx=20)
 
-# Create Volume Slider
-volume_slider = ttk.Scale(volume_frame, from_=0, to=1, orient=VERTICAL, length=125, value=1, command=volume)
+# Create Volume Slider (inverted so bottom = mute, top = max)
+volume_slider = ttk.Scale(volume_frame, from_=1, to=0, orient=VERTICAL, length=125, value=1, command=volume)
 volume_slider.pack(pady=10)
 
 # Create Song Slider
@@ -530,10 +746,39 @@ remove_song_menu.add_command(label="Delete All Songs From Playlist", command=del
 status_bar = Label(root, text='', bd=1, relief=GROOVE, anchor=E)
 status_bar.pack(fill=X, side=BOTTOM, ipady=2)
 
+# Theme wiring (after widgets exist)
+widgets = {
+	'playlist_box': playlist_box,
+	'main_frame': main_frame,
+	'control_frame': control_frame,
+	'volume_frame': volume_frame,
+	'status_bar': status_bar,
+	'back_button': back_button,
+	'forward_button': forward_button,
+	'play_button': play_button,
+	'stop_button': stop_button,
+}
+THEME = ThemeManager(root, widgets)
+# Load default skin; ignore failure to keep app working
+try:
+	THEME.load_skin('default')
+except Exception as e:
+	print('Skin load failed:', e)
 
-# Temporary Label
-my_label = Label(root, text='')
-my_label.pack(pady=20)
+# Skins menu to switch at runtime
+skins_menu = Menu(my_menu, tearoff=0)
+my_menu.add_cascade(label="Skins", menu=skins_menu)
+# Discover available skins in ./skins
+try:
+	skins_dir = Path(__file__).parent / 'skins'
+	available_skins = [p.name for p in skins_dir.iterdir() if p.is_dir()]
+	if not available_skins:
+		available_skins = ['default']
+except Exception:
+	available_skins = ['default']
+for skin in available_skins:
+	skins_menu.add_command(label=skin.title(), command=lambda s=skin: THEME.load_skin(s))
+
 
 
 

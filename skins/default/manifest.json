@@ -1,0 +1,34 @@
+{
+  "name": "default",
+  "window": {
+    "width": 500,
+    "height": 400,
+    "use_custom_chrome": false
+  },
+  "colors": {
+    "root_bg": "#101010",
+    "playlist_bg": "#000000",
+    "playlist_fg": "#00ff66",
+    "playlist_select_bg": "#00ff66",
+    "playlist_select_fg": "#000000",
+    "frame_bg": "#101010",
+    "status_bg": "#181818",
+    "status_fg": "#cfcfcf"
+  },
+  "fonts": {
+    "base": ["Helvetica", 10],
+    "status": ["Helvetica", 9]
+  },
+  "images": {
+    "back": "../../images/back50.png",
+    "forward": "../../images/forward50.png",
+    "play": "../../images/play50.png",
+    "pause": "../../images/pause50.png",
+    "stop": "../../images/stop50.png"
+  },
+  "metrics": {
+    "control_padx": 10,
+    "control_pady": 20,
+    "playlist_width": 60
+  }
+}
