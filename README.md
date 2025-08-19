@@ -16,8 +16,9 @@ A simple cross‑platform MP3 player built with Tkinter for the UI and pygame.mi
   - Elapsed/total time display in the status bar
   - Seek by dragging the time slider; release to jump smoothly without jitter
   - Cached track lengths (via mutagen) to avoid repeated disk I/O and reduce stutter
-- Volume control via a vertical slider
+- Volume control via a vertical slider (inverted: bottom = mute, top = max)
 - Robust asset loading using absolute paths for control button images
+- Skinning (Level 2): Switch skins at runtime from the Skins menu; per-skin colors, fonts, images, window size, and optional custom chrome
 
 Limitations
 - Playback and duration handling are optimized for MP3 files (file dialogs only offer .mp3).
@@ -30,9 +31,13 @@ Limitations
 - player.py — main application (Tkinter window, playlist box, status bar, controls)
 - images/
   - back50.png, forward50.png, play50.png, pause50.png, stop50.png — button icons
+- skins/
+  - default/manifest.json — baseline skin (uses shared images)
+  - test/manifest.json — demo skin with different colors/size and optional custom chrome
+- SKINNING.md — complete guide to authoring skins and the manifest schema
 - .gitignore
 
-Note: Make sure the images directory exists alongside player.py and contains the five files above.
+Note: Make sure the images directory exists alongside player.py and contains the five files above. Skins are discovered dynamically from the skins/ directory and can be switched at runtime from the Skins menu.
 
 ---
 
@@ -164,3 +169,20 @@ Issues and PRs are welcome. See the Roadmap for ideas. Please discuss significan
 ### License
 
 Choose a license (e.g., MIT, Apache‑2.0) and add a LICENSE file. Update this section accordingly.
+
+
+---
+
+### Skinning (Level 2)
+
+This app supports runtime skin switching. Skins are folders under `skins/` containing a `manifest.json` with colors, fonts, images, window size, and optional custom chrome.
+
+- Using skins:
+  - Run the app and open the “Skins” menu to switch between available skins (e.g., Default, Test).
+  - The window updates immediately; no restart required.
+- Custom chrome per skin:
+  - Skins can set `window.use_custom_chrome: true` to remove OS title bar/borders and enable click-drag to move the window.
+  - Optionally set `window.transparent_color` (best on Windows) to experiment with shaped/transparent regions.
+- Authoring skins:
+  - See SKINNING.md for the complete manifest schema, examples, and best practices.
+
