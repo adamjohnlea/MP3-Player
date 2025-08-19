@@ -253,3 +253,36 @@ Use these as starting points for your own skins.
 ---
 
 Happy skinning! If you run into issues, open the project and check `player.py`’s `ThemeManager.apply()` for the exact keys and behavior implemented in this version.
+
+
+## What is `force_theme`?
+
+Some ttk themes (especially native OS themes like Aqua on macOS or Vista/xpnative on Windows) ignore or partially ignore color customizations for ttk widgets like `ttk.Scale`. The thumb/handle color or trough color may not change even if you configure styles in code.
+
+- The `slider.force_theme` option in a skin’s `manifest.json` lets the skin request a specific ttk theme to be activated before applying slider styles.
+- Example:
+  "slider": {
+    "trough_color": "#1f2937",
+    "slider_color": "#00d1ff",
+    "thickness": 10,
+    "force_theme": "clam"
+  }
+
+What happens under the hood:
+- ThemeManager calls ttk.Style().theme_use("clam") if `force_theme` is provided.
+- Then it applies custom styles to our slider styles: `Themed.Horizontal.TScale` (song scrubber) and `Themed.Vertical.TScale` (volume).
+
+Why "clam"?
+- "clam" is a pure‑Tk theme that reliably honors color and thickness options for ttk widgets across platforms. It’s a safe choice when you want consistent, skinnable sliders.
+
+Other themes you can try:
+- Built‑in: "default", "classic", "alt", "clam" (portable), and on Windows: "vista", "xpnative"; on macOS there may be an Aqua theme (often chosen automatically by Tk).
+- Third‑party: themes from `ttkthemes` or `ttkbootstrap` (not bundled here) can also be used if available in your environment.
+
+Caveats:
+- Changing ttk theme is global for ttk widgets in the app window. In this project, we scope our style names (Themed.*) to reduce unintended changes, but the base theme still influences ttk defaults.
+- If your skin doesn’t specify `force_theme`, the app uses the current/default ttk theme. On some platforms, slider colors may not change under the native theme.
+
+Recommendations:
+- If your slider colors or thickness aren’t visible under a native theme, set `force_theme` to "clam" in the skin to ensure the styles take effect.
+- For skins that don’t restyle ttk sliders, you can omit `force_theme` entirely.
